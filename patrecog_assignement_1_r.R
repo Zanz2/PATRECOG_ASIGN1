@@ -25,16 +25,13 @@ Visually, if we omit the \"pixel\" prefix, the pixels make up the image like thi
 756 757 758 759 ... 782 783 "  
 }
 
-
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 library("OpenImageR")
 library("Hmisc")
-
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 mnist.dat = read.csv("mnist.csv")
-mnist_original = read.csv("mnist.csv")
 dim(mnist.dat)
 
-imageShow(matrix(as.numeric(mnist.dat[380,-1]),nrow=28,ncol=28,byrow=T))
+#Part 1---------------------------------------------
 
 summary(mnist.dat)
 
@@ -49,4 +46,19 @@ correct_pred <- mnist.dat[mnist.dat[,1] == "1",]
 correct_pred <- dim(correct_pred)[1]
 accuracy = correct_pred / number_of_entries
 accuracy # percentage of casses classified correctly if we assume the majority class
-#describe(mnist.dat)
+
+#Part 2---------------------------------------------
+library(nnet)
+
+ink_sum <- apply(mnist.dat[,-1],MARGIN=1,FUN=sum)  # Margin means do function on every row
+ink_mean <- apply(mnist.dat[,-1],MARGIN=1,FUN=mean)  # Margin means do function on every row
+ink_sd <- apply(mnist.dat[,-1],MARGIN=1,FUN=sd)  # Margin means do function on every row
+
+mnist_v2 <- cbind(ink_sum,ink_mean,ink_sd,mnist.dat[,-1])
+training_set_size = number_of_entries * 0.75 # 75-25% training-test split
+x_train <- mnist_v2[1:training_set_size,]
+x_test <- mnist_v2[(training_set_size+1):number_of_entries,]
+y_train <- y[1:training_set_size]
+y_test <- y[(training_set_size+1):number_of_entries]
+
+mnist_v2.multinom <- multinom(V65 ∼ ., data =optdigits.train[,-c(1,40)], maxit = 1000)
