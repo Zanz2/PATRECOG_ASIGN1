@@ -27,14 +27,28 @@ Visually, if we omit the \"pixel\" prefix, the pixels make up the image like thi
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 library("OpenImageR")
-library("Hmisc")
 mnist.dat = read.csv("mnist.csv")
 dim(mnist.dat)
 
 #Part 1---------------------------------------------
-
+#Begin with an exploratory analysis of the data. 
+#Can you spot useless variables by looking at their summary statisitcs? 
+#Consider the class distribution: what percentage of cases would be classified correctly if we simply predict the majority class? 
+#Convert the first column (the digit) to a categorical variable using "as.factor" in R.
+#Report any findings from your exploratory analysis that you think are of interest.
 summary(mnist.dat)
+get_useless_indexes <- function(matrix){
+  useless_pixels <- c() # these are always 1 value and dont change, so they are useless for informing our model
+  for (i in 1:dim(matrix)[2]){
+    unique_pixel_values <- unique(matrix[,i])
+    if (length(unique_pixel_values)==1){ 
+      useless_pixels <- c(useless_pixels,i)
+    }
+  }
+  return(useless_pixels)
+}
 
+useless_mnist_pixels <- get_useless_indexes(mnist.dat)
 mnist.dat[,1] <- as.factor(mnist.dat[,1]) # get all values from the first column (the number on the image)
 y <- mnist.dat[,1] # this is just a vector of the classes now
 rev(sort(table(y))) # reverses a sorted table of how many times each class (factor) occurs
@@ -48,17 +62,49 @@ accuracy = correct_pred / number_of_entries
 accuracy # percentage of casses classified correctly if we assume the majority class
 
 #Part 2---------------------------------------------
+#Derive from the raw pixel data a feature that quantifies "how much ink" a digit costs.
+#Report the average and standard deviation of this feature within each class. 
+#If you look at these statistics, can you see which pairs of classes can be distinguished well, and which pairs will be hard to distinguish using this feature?
+#  Hint: Use the R function "tapply" to compute the mean and standard deviation per digit. 
+#If your feature is called "ink", then "tapply(ink,mnist.dat[,1],mean)" will compute the mean value of ink for each digit.
 library(nnet)
 
 ink_sum <- apply(mnist.dat[,-1],MARGIN=1,FUN=sum)  # Margin means do function on every row
 ink_mean <- apply(mnist.dat[,-1],MARGIN=1,FUN=mean)  # Margin means do function on every row
 ink_sd <- apply(mnist.dat[,-1],MARGIN=1,FUN=sd)  # Margin means do function on every row
+# add the means, sd, for each class (unique numbers)
+ink_scaled <- rep(c(0),length(ink_sum))
+mnist.dat <- cbind(ink_sum,ink_mean,ink_sd,mnist.dat)
 
-mnist_v2 <- cbind(ink_sum,ink_mean,ink_sd,mnist.dat[,-1])
+
+digit_sd <- aggregate(mnist.dat$ink_sum,by=list(mnist.dat$label),FUN=sd )
+digit_mean <- aggregate(mnist.dat$ink_sum,by=list(mnist.dat$label),FUN=mean )
+
+#Using only the ink feature, fit a multinomial logit model and evaluate,
+#by looking at the confusion matrix, how well this model can distinguish between the different classes.
+#Since in this part of the assignment we only consider very simple models, 
+#you may use the complete data set both for training and evaluation.
+
 training_set_size = number_of_entries * 0.75 # 75-25% training-test split
-x_train <- mnist_v2[1:training_set_size,]
-x_test <- mnist_v2[(training_set_size+1):number_of_entries,]
-y_train <- y[1:training_set_size]
-y_test <- y[(training_set_size+1):number_of_entries]
+#mnist.dat.train <- mnist.dat[1:training_set_size,]
+#mnist.dat.test <- mnist.dat[(training_set_size+1):number_of_entries,]
 
-mnist_v2.multinom <- multinom(V65 ∼ ., data =optdigits.train[,-c(1,40)], maxit = 1000)
+
+mnist.dat$ink_scaled <- scale(mnist.dat$ink_sum,scale=max(mnist.dat$ink_sum),center=FALSE)
+
+new_df <- data.frame(mnist.dat$label,mnist.dat$ink_scaled)
+colnames(new_df) <- c("label","ink_scaled")
+#For example, how well can the model distinguish between the digits 
+#"1" and "8"? And how well between "3" and "8"? 
+#Use the R function "scale" to scale your feature before you apply "multinom" to fit the multinomial logit model.
+multinom <- multinom(new_df$label ~ new_df$ink_scaled)
+multinom.pred <- predict(multinom,new_df$ink_scaled)
+table(new_df$label,multinom.pred)
+
+#ANSWER: the model cannot distinguish between 3 and 8 at all
+# it didnt predict a 8 once, and predicted an 8 being a 3, more times than it 
+# predicted a 3 correctly
+# it can distinguish between 1 and 8 pretty well, it incorrectly predicted
+# an 8 being a 1 140 times, but predicted 1 correctly 2856 times
+
+
