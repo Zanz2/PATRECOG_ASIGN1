@@ -262,5 +262,7 @@ multinom <- multinom(new_df$label ~ ., data = new_df)
 multinom.pred <- predict(multinom,new_df[,-1])
 table(new_df$label,multinom.pred)
 ```
-
+The table is somewhat better, in most cases, out of all the predictions for a certain image, the correct class had the most counts out of all other classes (0,1,2,3,5,7,8,9)
+4 was getting confused with 5
+6 was getting confused with 8, probably because they produce simillar straight line detection images, they also look simillar.
 
