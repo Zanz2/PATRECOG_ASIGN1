@@ -204,33 +204,35 @@ Does the above for each image, gets their straight line images, adds them to new
 
 #mnist_original = read.csv("mnist.csv")
 line_image_matrix <- array(c(0),dim = c(42000,28*28))
-readRDS(file = "line_image_matrix.rds") # skip the below and just read it
 ```
 This took 50 minutes on my machine, but this will be a secret
 
 ```{r}
-pb = txtProgressBar(min = 1, max = nrow(mnist.dat), style = 3) 
-
-
-for (image_index in 1:nrow(mnist.dat)){
-  image_mat <- matrix(as.numeric(mnist.dat[image_index,5:788]/255),nrow=28,ncol=28,byrow=T)
-  image_object <- writePNG(image_mat)
-  edges <- image_canny(image_read(image_object),geometry="0x1+10%+30%")
-  hough <- image_hough_draw(edges,geometry="30x30+11",size=0.3,color="white",bg = "black")
-  gray_image <- image_convert(hough,type="grayscale")
-  gray_image_data <- t(as.numeric(image_data(gray_image))[,,1]) # make it 2D
-  line_image_matrix[image_index,] <- as.vector(gray_image_data)
-  if(image_index %% 100 == 0){
-      setTxtProgressBar(pb,image_index)
-      #browser()
+if(!file.exists("line_image_matrix.rds")){
+  pb = txtProgressBar(min = 1, max = nrow(mnist.dat), style = 3) 
+  
+  
+  for (image_index in 1:nrow(mnist.dat)){
+    image_mat <- matrix(as.numeric(mnist.dat[image_index,5:788]/255),nrow=28,ncol=28,byrow=T)
+    image_object <- writePNG(image_mat)
+    edges <- image_canny(image_read(image_object),geometry="0x1+10%+30%")
+    hough <- image_hough_draw(edges,geometry="30x30+11",size=0.3,color="white",bg = "black")
+    gray_image <- image_convert(hough,type="grayscale")
+    gray_image_data <- t(as.numeric(image_data(gray_image))[,,1]) # make it 2D
+    line_image_matrix[image_index,] <- as.vector(gray_image_data)
+    if(image_index %% 100 == 0){
+        setTxtProgressBar(pb,image_index)
+        #browser()
+    }
+  
   }
-
+  close(pb)
+  #save file so it doesnt have to be calculated again
+  saveRDS(line_image_matrix, file = "line_image_matrix.rds")
+}else{
+  readRDS(file = "line_image_matrix.rds") # skip the below and just read it
+  print("done")
 }
-close(pb)
-```
-```{r}
-#save file so it doesnt have to be calculated again
-saveRDS(line_image_matrix, file = "line_image_matrix.rds")
 ```
 
 Calculate the ink sum again, but this time its on the images that represent detected straight lines on the mnist images. This, combined with the original ink sum feature of the images will make differentiating between them easier.
@@ -251,9 +253,9 @@ straightness_sd
 ```
 Now we fit it to the multinomial classifier:
 ```{r}
-ink_scaled <- scale(mnist.dat$ink_sum,scale=max(mnist.dat$ink_sum),center=FALSE)
+ink_scaled <- scale(ink_sum,scale=max(ink_sum))
 
-new_df <- data.frame(mnist.dat$label,mnist.dat$ink_scaled,straight_line_df[,1])
+new_df <- data.frame(mnist.dat$label,mnist.dat$ink_scaled,ink_scaled)
 colnames(new_df) <- c("label","ink_scaled","straight_line_scaled")
 
 multinom <- multinom(new_df$label ~ ., data = new_df)
