@@ -233,21 +233,32 @@ close(pb)
 saveRDS(line_image_matrix, file = "line_image_matrix.rds")
 ```
 
-Calculate the ink sum again, but this time its on the images that represent detected straight lines on the mnist images, so more lines = straighter object less lines = rounder object. Which means that the amount of ink will determine how straight or curved the digit is. This, combined with the original ink sum feature of the images will make differentiating between them easier.
+Calculate the ink sum again, but this time its on the images that represent detected straight lines on the mnist images. This, combined with the original ink sum feature of the images will make differentiating between them easier.
 ```{r}
 ink_sum <- apply(line_image_matrix,MARGIN=1,FUN=sum) 
 straight_line_df <- cbind(ink_sum,y,line_image_matrix)
 ```
 Mean of these new straight images
 ```{r}
-straightness_sd <- aggregate(straight_line_df$ink_sum,by=list(straight_line_df$y),FUN=sd )
-straightness_mean <- aggregate(straight_line_df$ink_sum,by=list(straight_line_df$y),FUN=mean )
+straightness_sd <- aggregate(straight_line_df[,1],by=list(straight_line_df[,2]),FUN=sd )
+straightness_mean <- aggregate(straight_line_df[,1],by=list(straight_line_df[,2]),FUN=mean )
+straightness_mean
 
 ```
-
+SD:
 ```{r}
 straightness_sd
 ```
+Now we fit it to the multinomial classifier:
+```{r}
+ink_scaled <- scale(mnist.dat$ink_sum,scale=max(mnist.dat$ink_sum),center=FALSE)
 
+new_df <- data.frame(mnist.dat$label,mnist.dat$ink_scaled,straight_line_df[,1])
+colnames(new_df) <- c("label","ink_scaled","straight_line_scaled")
+
+multinom <- multinom(new_df$label ~ ., data = new_df)
+multinom.pred <- predict(multinom,new_df[,-1])
+table(new_df$label,multinom.pred)
+```
 
 
