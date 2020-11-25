@@ -31,11 +31,11 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 library("OpenImageR")
 mnist.dat = read.csv("mnist.csv")
 dim(mnist.dat)
-imageShow(matrix(as.numeric(mnist.dat[380,-1]),nrow=28,ncol=28,byrow=T))
+#imageShow(matrix(as.numeric(mnist.dat[380,-1]),nrow=28,ncol=28,byrow=T))
 ```
 
 
-Part 1---------------------------------------------
+Part 1---------------------------------------------\
 Begin with an exploratory analysis of the data. 
 Can you spot useless variables by looking at their summary statisitcs? 
 Consider the class distribution: what percentage of cases would be classified correctly if we simply predict the majority class? 
@@ -57,7 +57,7 @@ get_useless_indexes <- function(matrix){
 useless_mnist_pixels <- get_useless_indexes(mnist.dat)
 mnist.dat[,1] <- as.factor(mnist.dat[,1]) # get all values from the first column (the number on the image)
 y <- mnist.dat[,1] # this is just a vector of the classes now
-rev(sort(table(y))) # reverses a sorted table of how many times each class (factor) occurs
+
 number_of_entries <- dim(mnist.dat)[1] #first dimension of the dataset is the number of rows
 
 
@@ -65,7 +65,13 @@ majority_class = rev(sort(table(y)))[1]
 correct_pred <- mnist.dat[mnist.dat[,1] == "1",]
 correct_pred <- dim(correct_pred)[1]
 accuracy = correct_pred / number_of_entries
+
 ```
+How many times each class occurs:
+```{r}
+rev(sort(table(y))) # reverses a sorted table of how many times each class (factor) occurs
+```
+
 Accuracy with majority classifier:
 ```{r}
 accuracy
@@ -77,7 +83,7 @@ useless_mnist_pixels
 
 
 
-Part 2---------------------------------------------
+Part 2---------------------------------------------\
 Derive from the raw pixel data a feature that quantifies "how much ink" a digit costs.
 Report the average and standard deviation of this feature within each class. 
 If you look at these statistics, can you see which pairs of classes can be distinguished well, and which pairs will be hard to distinguish using this feature?
@@ -97,6 +103,16 @@ mnist.dat <- cbind(ink_sum,ink_mean,ink_sd,mnist.dat)
 
 digit_sd <- aggregate(mnist.dat$ink_sum,by=list(mnist.dat$label),FUN=sd )
 digit_mean <- aggregate(mnist.dat$ink_sum,by=list(mnist.dat$label),FUN=mean )
+```
+Digit mean:
+```{r}
+digit_mean
+```
+
+
+Digit Standard Deviation:
+```{r}
+digit_sd
 ```
 
 
@@ -124,13 +140,114 @@ For example, how well can the model distinguish between the digits
 Use the R function "scale" to scale your feature before you apply "multinom" to fit the multinomial logit model.
 
 
-ANSWER: the model cannot distinguish between 3 and 8 at all
- it didnt predict a 8 once, and predicted an 8 being a 3, more times than it 
- predicted a 3 correctly
+ANSWER:\
+The model is relatively good at detecting 0's and 1's, it has a hard time distinguishing between the other numbers though, with sometimes close to equal probabilities across the board.
+
+I think this is because the means and standard deviations for digits 4 5 and 6 are somewhat simillar, so based on the sum ink feature alone it cannot distinguish between them and a 7, that is also simillar but occurs more often. In general when the values are simillar it seems to pick the most likely number based on the dataset.
+
+the model cannot distinguish between 3 and 8 at all
+ it didnt predict a 8 once, and predicted an 8 being a 3, more times than itpredicted a 3 correctly
  it can distinguish between 1 and 8 pretty well, it incorrectly predicted
  an 8 being a 1 140 times, but predicted 1 correctly 2856 times
 
+Part 3 -------------------------------------------\
+In addition to "ink", come up with one other feature, and explain why you think it might discriminate well between the digits. Your report should contain an unambiguous description of how the feature is derived from the raw data. Perform the same analysis for this new feature as you did for the ink feature.
+
+
+Below I use canny edge detector to find how many curves each number has, example below
 ```{r}
+library(magick)
+library(png)
+dim(mnist.dat[15,5:788])
+
+test_image <- matrix(as.numeric(mnist.dat[15,5:788]/255),nrow=28,ncol=28,byrow=T) # get an 2d 28 x 28 matrix representing the 15th image
+
+test_image_object <- writePNG(test_image) # load the matrix into an image like object 
+
+# To check what the image looks like, paste this into console
+#imageShow(matrix(as.numeric(mnist.dat[15,5:788]),nrow=28,ncol=28,byrow=T))
+```
+
+What the edge detector output looks like for the test image
+```{r}
+edges <- image_canny(image_read(test_image_object),geometry="0x1+10%+30%") # Run canny edge detector, the geometry is using the default parameter
+edges
+```
+
+Below we use hough line transform to detect straight lines in an image,
+I fitted the geometry parameter until the output was detecting reasonably straight lines in the 28x28 image)
+(what the output looks like is below)
+```{r}
+hough <- image_hough_draw(edges,geometry="30x30+11",size=0.3,color="white",bg = "black")
+gray_image <- image_convert(hough,type="grayscale")
+gray_image_data <- as.numeric(image_data(gray_image)) # this function converts the image to a matrix, like the original mnist data, but with lower value ranges (0 to 1) for pixels
+gray_image
+```
+
+
+
+```{r}
+# this is just the above code in 1 block to see what different images look like
+index_of_image <- 60
+test_image <- matrix(as.numeric(mnist.dat[index_of_image,5:788]/255),nrow=28,ncol=28,byrow=T) 
+test_image_object <- writePNG(test_image)
+edges <- image_canny(image_read(test_image_object),geometry="0x1+10%+30%")
+edges
+hough <- image_hough_draw(edges,geometry="30x30+11",size=0.3,color="white",bg = "black")
+gray_image <- image_convert(hough,type="grayscale")
+gray_image
+```
+
+Does the above for each image, gets their straight line images, adds them to new mnist like matrix
+```{r}
+# this will make my own mnist with the straight line detections
+
+#mnist_original = read.csv("mnist.csv")
+line_image_matrix <- array(c(0),dim = c(42000,28*28))
+readRDS(file = "line_image_matrix.rds") # skip the below and just read it
+```
+This took 50 minutes on my machine, but this will be a secret
+
+```{r}
+pb = txtProgressBar(min = 1, max = nrow(mnist.dat), style = 3) 
+
+
+for (image_index in 1:nrow(mnist.dat)){
+  image_mat <- matrix(as.numeric(mnist.dat[image_index,5:788]/255),nrow=28,ncol=28,byrow=T)
+  image_object <- writePNG(image_mat)
+  edges <- image_canny(image_read(image_object),geometry="0x1+10%+30%")
+  hough <- image_hough_draw(edges,geometry="30x30+11",size=0.3,color="white",bg = "black")
+  gray_image <- image_convert(hough,type="grayscale")
+  gray_image_data <- t(as.numeric(image_data(gray_image))[,,1]) # make it 2D
+  line_image_matrix[image_index,] <- as.vector(gray_image_data)
+  if(image_index %% 100 == 0){
+      setTxtProgressBar(pb,image_index)
+      #browser()
+  }
+
+}
+close(pb)
+```
+```{r}
+#save file so it doesnt have to be calculated again
+saveRDS(line_image_matrix, file = "line_image_matrix.rds")
+```
+
+Calculate the ink sum again, but this time its on the images that represent detected straight lines on the mnist images, so more lines = straighter object less lines = rounder object. Which means that the amount of ink will determine how straight or curved the digit is. This, combined with the original ink sum feature of the images will make differentiating between them easier.
+```{r}
+ink_sum <- apply(line_image_matrix,MARGIN=1,FUN=sum) 
+straight_line_df <- cbind(ink_sum,y,line_image_matrix)
+```
+Mean of these new straight images
+```{r}
+straightness_sd <- aggregate(straight_line_df$ink_sum,by=list(straight_line_df$y),FUN=sd )
+straightness_mean <- aggregate(straight_line_df$ink_sum,by=list(straight_line_df$y),FUN=mean )
 
 ```
+
+```{r}
+straightness_sd
+```
+
+
 
