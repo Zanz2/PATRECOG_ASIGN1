@@ -1,9 +1,8 @@
 ---
-title: "R Notebook"
+title: "Pattern Recognition assignement in R"
 output: html_notebook
 ---
 
-Patrecog assignement in R
 
 The data file mnist.csv contains gray-scale images of hand-drawn digits, from zero through nine.
 
@@ -27,7 +26,7 @@ Visually, if we omit the \"pixel\" prefix, the pixels make up the image like thi
 (its 28 x 28)
 
 ```{r}
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+#setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 library("OpenImageR")
 mnist.dat = read.csv("mnist.csv")
 dim(mnist.dat)
@@ -54,7 +53,7 @@ get_useless_indexes <- function(matrix){
   return(useless_pixels)
 }
 
-useless_mnist_pixels <- get_useless_indexes(mnist.dat)
+useless_mnist_pixels <- get_useless_indexes(mnist.dat[,-1])
 mnist.dat[,1] <- as.factor(mnist.dat[,1]) # get all values from the first column (the number on the image)
 y <- mnist.dat[,1] # this is just a vector of the classes now
 
@@ -199,16 +198,12 @@ gray_image
 ```
 
 Does the above for each image, gets their straight line images, adds them to new mnist like matrix
-```{r}
-# this will make my own mnist with the straight line detections
 
-#mnist_original = read.csv("mnist.csv")
-line_image_matrix <- array(c(0),dim = c(42000,28*28))
-```
 This took 50 minutes on my machine, but this will be a secret
 
 ```{r}
-if(!file.exists("line_image_matrix.rds")){
+if(!(file.exists("line_image_matrix.rds"))){
+  line_image_matrix <- array(c(0),dim = c(42000,28*28))
   pb = txtProgressBar(min = 1, max = nrow(mnist.dat), style = 3) 
   
   
@@ -230,7 +225,7 @@ if(!file.exists("line_image_matrix.rds")){
   #save file so it doesnt have to be calculated again
   saveRDS(line_image_matrix, file = "line_image_matrix.rds")
 }else{
-  readRDS(file = "line_image_matrix.rds") # skip the below and just read it
+  line_image_matrix <- readRDS("line_image_matrix.rds") # skip the below and just read it
   print("done")
 }
 ```
@@ -251,6 +246,8 @@ SD:
 ```{r}
 straightness_sd
 ```
+Part 4----------------------------------------------------\
+
 Now we fit it to the multinomial classifier:
 ```{r}
 ink_scaled <- scale(ink_sum,scale=max(ink_sum))
@@ -262,7 +259,44 @@ multinom <- multinom(new_df$label ~ ., data = new_df)
 multinom.pred <- predict(multinom,new_df[,-1])
 table(new_df$label,multinom.pred)
 ```
-The table is somewhat better, in most cases, out of all the predictions for a certain image, the correct class had the most counts out of all other classes (0,1,2,3,5,7,8,9)
-4 was getting confused with 5
-6 was getting confused with 8, probably because they produce simillar straight line detection images, they also look simillar.
+The table is a lot better than using only the ink sum feature, and somewhat better than using the ink sum feature with the standard deviation for pixels inside each image, in most cases, out of all the predictions for a certain image, the correct class had the most counts out of all other classes (0,1,2,3,5,7,8,9)
+4 was getting confused with 5, the straight line detector produces a simillar amount of straight edges for both usually.
+6 was getting confused with 8, because they produce simillar straight line detection images, they also look simillar.
+
+
+Overall the results are considerably better than our first prediction, with the predictor still confusing 4's with 5's and 6's with 8's.
+
+The standard deviation of the straight line ink used feature is also high, which means that the values are often spread far out around the mean and vary inside each number class. This would mean that the geometry parameter of the hough image transform function might need further tweaking, but since it takes a long time to run on every image in mnist, this will not be done now.
+
+
+
+Part 5 ----------------------------------------\
+In this part we use the 784 raw pixel values themselves as features.
+
+
+```{r}
+library(glmnet)
+# removes all the columns with labels ink used  etc
+
+#useless_pixels <- get_useless_indexes(mnist.dat)
+
+test_set <- mnist.dat[5001:nrow(mnist.dat),-c(ncol(mnist.dat),3,2,1)]
+train_set <- mnist.dat[1:5000,-c(ncol(mnist.dat),3,2,1)]
+
+#Create 10 equally size folds
+folds <- cut(seq(1,nrow(train_set)),breaks=10,labels=FALSE)
+
+#Perform 10 fold cross validation
+for(i in 1:10){
+    testIndexes <- which(folds==i,arr.ind=TRUE)
+    testData <- train_set[testIndexes, ]
+    trainData <- train_set[-testIndexes, ]
+    
+    lasso <- cv.glmnet(as.matrix(trainData),trainData[,1]
+      ,family="multinomial",type.measure="class")
+    plot(lasso)
+    browser()
+}
+
+```
 
