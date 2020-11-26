@@ -224,8 +224,9 @@ if(!(file.exists("line_image_matrix.rds"))){
   close(pb)
   #save file so it doesnt have to be calculated again
   saveRDS(line_image_matrix, file = "line_image_matrix.rds")
+  print("done")
 }else{
-  line_image_matrix <- readRDS("line_image_matrix.rds") # skip the below and just read it
+  line_image_matrix <- readRDS("line_image_matrix.rds")
   print("done")
 }
 ```
@@ -273,15 +274,44 @@ The standard deviation of the straight line ink used feature is also high, which
 Part 5 ----------------------------------------\
 In this part we use the 784 raw pixel values themselves as features.
 
+First downsample the images, because if not, it takes too long to train, removes unnecessary columns too, saves it as an object again
+```{r}
 
+
+if(!(file.exists("preprocessed_data.rds"))){
+preprocessed_data <- array(c(0),dim = c(nrow(mnist.dat),14*14))
+
+pb = txtProgressBar(min = 1, max = nrow(mnist.dat), style = 3) 
+for (index in 1:nrow(mnist.dat)){
+ preprocessed_data[index,] <- down_sample_image(matrix(as.numeric(mnist.dat[index,-c(ncol(mnist.dat),4,3,2,1)]),nrow=28,ncol=28,byrow=T),2)
+ setTxtProgressBar(pb,index)
+}
+close(pb)
+
+saveRDS(preprocessed_data, file = "preprocessed_data.rds")
+print("done")
+}else{
+  preprocessed_data <- readRDS("preprocessed_data.rds")
+  print("done")
+}
+
+```
+
+Split the data into test and train set then split the train set into folds for cross validation
 ```{r}
 library(glmnet)
-# removes all the columns with labels ink used  etc
+
+
 
 #useless_pixels <- get_useless_indexes(mnist.dat)
+preprocessed_data_df <- data.frame(mnist.dat$label,preprocessed_data)
 
-test_set <- mnist.dat[5001:nrow(mnist.dat),-c(ncol(mnist.dat),3,2,1)]
-train_set <- mnist.dat[1:5000,-c(ncol(mnist.dat),3,2,1)]
+#imageShow(matrix(as.numeric(preprocessed_data_df[1,-1]),nrow=14,ncol=14,byrow=T)) # to check that it worked
+
+#imageShow(matrix(as.numeric(mnist.dat[1,-c(1,2,3,4,ncol(mnist.dat))]),nrow=28,ncol=28,byrow=T)) # to check that it worked
+
+test_set <- preprocessed_data[5001:nrow(mnist.dat),]
+train_set <- preprocessed_data[1:5000,]
 
 #Create 10 equally size folds
 folds <- cut(seq(1,nrow(train_set)),breaks=10,labels=FALSE)
