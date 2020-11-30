@@ -162,7 +162,7 @@ Part 3 -------------------------------------------\
 In addition to "ink", come up with one other feature, and explain why you think it might discriminate well between the digits. Your report should contain an unambiguous description of how the feature is derived from the raw data. Perform the same analysis for this new feature as you did for the ink feature.
 
 
-Below I use canny edge detector to find how many curves each number has, example below
+I decided to use a canny edge detector on the images, with the hough transform to find straight lines, then because we are limited to only 1 feature (1 column) i calculate the ink sum for those new images that represent the detected straight lines on the image
 ```{r}
 library(magick)
 library(png)
