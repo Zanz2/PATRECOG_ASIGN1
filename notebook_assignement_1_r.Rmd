@@ -133,6 +133,15 @@ table(new_df$label,multinom.pred)
 ```
 
 
+```{r}
+library(MLmetrics)
+# Accuracy:
+print(sum(diag(table(new_df$label,multinom.pred)))/sum(table(new_df$label,multinom.pred)))
+# accuracy 22%
+#F1 score
+F1_Score(multinom.pred,new_df$label)
+# f1 score 0.351 
+```
 
 For example, how well can the model distinguish between the digits 
 "1" and "8"? And how well between "3" and "8"? 
@@ -159,7 +168,7 @@ library(magick)
 library(png)
 dim(mnist.dat[15,5:788])
 
-test_image <- matrix(as.numeric(mnist.dat[15,5:788]/255),nrow=28,ncol=28,byrow=T) # get an 2d 28 x 28 matrix representing the 15th image
+test_image <- matrix(as.numeric(mnist.dat[7,5:788]/255),nrow=28,ncol=28,byrow=T) # get an 2d 28 x 28 matrix representing the 15th image
 
 test_image_object <- writePNG(test_image) # load the matrix into an image like object 
 
@@ -177,7 +186,7 @@ Below we use hough line transform to detect straight lines in an image,
 I fitted the geometry parameter until the output was detecting reasonably straight lines in the 28x28 image)
 (what the output looks like is below)
 ```{r}
-hough <- image_hough_draw(edges,geometry="30x30+11",size=0.3,color="white",bg = "black")
+hough <- image_hough_draw(edges,geometry="50x50+11",size=0.3,color="white",bg = "black")
 gray_image <- image_convert(hough,type="grayscale")
 gray_image_data <- as.numeric(image_data(gray_image)) # this function converts the image to a matrix, like the original mnist data, but with lower value ranges (0 to 1) for pixels
 gray_image
@@ -187,12 +196,12 @@ gray_image
 
 ```{r}
 # this is just the above code in 1 block to see what different images look like
-index_of_image <- 60
+index_of_image <- 3
 test_image <- matrix(as.numeric(mnist.dat[index_of_image,5:788]/255),nrow=28,ncol=28,byrow=T) 
 test_image_object <- writePNG(test_image)
 edges <- image_canny(image_read(test_image_object),geometry="0x1+10%+30%")
 edges
-hough <- image_hough_draw(edges,geometry="30x30+11",size=0.3,color="white",bg = "black")
+hough <- image_hough_draw(edges,geometry="50x50+11",size=0.3,color="white",bg = "black")
 gray_image <- image_convert(hough,type="grayscale")
 gray_image
 ```
@@ -211,7 +220,7 @@ if(!(file.exists("line_image_matrix.rds"))){
     image_mat <- matrix(as.numeric(mnist.dat[image_index,5:788]/255),nrow=28,ncol=28,byrow=T)
     image_object <- writePNG(image_mat)
     edges <- image_canny(image_read(image_object),geometry="0x1+10%+30%")
-    hough <- image_hough_draw(edges,geometry="30x30+11",size=0.3,color="white",bg = "black")
+    hough <- image_hough_draw(edges,geometry="50x50+11",size=0.3,color="white",bg = "black")
     gray_image <- image_convert(hough,type="grayscale")
     gray_image_data <- t(as.numeric(image_data(gray_image))[,,1]) # make it 2D
     line_image_matrix[image_index,] <- as.vector(gray_image_data)
@@ -260,12 +269,21 @@ multinom <- multinom(new_df$label ~ ., data = new_df)
 multinom.pred <- predict(multinom,new_df[,-1])
 table(new_df$label,multinom.pred)
 ```
-The table is a lot better than using only the ink sum feature, and somewhat better than using the ink sum feature with the standard deviation for pixels inside each image, in most cases, out of all the predictions for a certain image, the correct class had the most counts out of all other classes (0,1,2,3,5,7,8,9)
+```{r}
+# Accuracy:
+print(sum(diag(table(new_df$label,multinom.pred)))/sum(table(new_df$label,multinom.pred)))
+# Accuracy is 28%
+# F1 score
+F1_Score(multinom.pred,new_df$label)
+# F1 score is 0.361
+```
+
+The accuracy is somewhat better than using only the ink sum feature (22% vs 28%), in most cases, out of all the predictions for a certain image, the correct class had the most counts out of all other classes (0,1,2,3,5,7,8,9)
 4 was getting confused with 5, the straight line detector produces a simillar amount of straight edges for both usually.
-6 was getting confused with 8, because they produce simillar straight line detection images, they also look simillar.
+6 was getting confused with 8,3 and 4, because they produce simillar straight line detection images, they also look simillar.
 
 
-Overall the results are considerably better than our first prediction, with the predictor still confusing 4's with 5's and 6's with 8's.
+Overall the results are considerably better than our first prediction, with the predictor still confusing 4's with 5's and 6's with 8's 3's and 4's.
 
 The standard deviation of the straight line ink used feature is also high, which means that the values are often spread far out around the mean and vary inside each number class. This would mean that the geometry parameter of the hough image transform function might need further tweaking, but since it takes a long time to run on every image in mnist, this will not be done now.
 
@@ -274,7 +292,7 @@ The standard deviation of the straight line ink used feature is also high, which
 Part 5 ----------------------------------------\
 In this part we use the 784 raw pixel values themselves as features.
 
-First downsample the images, because if not, it takes too long to train, removes unnecessary columns too, saves it as an object again
+First we downsample the images, because if we dont, it takes too long to train, we remove unnecessary columns from before too (ink features), then save it as an object again
 ```{r}
 
 
@@ -300,8 +318,12 @@ print("done")
 Split the data into test and train set then split the train set into folds for cross validation
 ```{r}
 library(glmnet)
+library(e1071)
+library(nnet)
 
-
+#cv.glmnet
+#tune.svm
+#tune.nnet
 
 #useless_pixels <- get_useless_indexes(mnist.dat)
 preprocessed_data_df <- data.frame(mnist.dat$label,preprocessed_data)
@@ -310,23 +332,103 @@ preprocessed_data_df <- data.frame(mnist.dat$label,preprocessed_data)
 
 #imageShow(matrix(as.numeric(mnist.dat[1,-c(1,2,3,4,ncol(mnist.dat))]),nrow=28,ncol=28,byrow=T)) # to check that it worked
 
-test_set <- preprocessed_data[5001:nrow(mnist.dat),]
-train_set <- preprocessed_data[1:5000,]
+set.seed(30)
+rows <- sample(nrow(mnist.dat)) # randomly shuffle dataset
+preprocessed_data_df <- preprocessed_data_df[rows,]
 
-#Create 10 equally size folds
-folds <- cut(seq(1,nrow(train_set)),breaks=10,labels=FALSE)
+test_set <- preprocessed_data_df[5001:nrow(mnist.dat),]
+train_set <- preprocessed_data_df[1:5000,]
+```
 
-#Perform 10 fold cross validation
-for(i in 1:10){
-    testIndexes <- which(folds==i,arr.ind=TRUE)
-    testData <- train_set[testIndexes, ]
-    trainData <- train_set[-testIndexes, ]
-    
-    lasso <- cv.glmnet(as.matrix(trainData),trainData[,1]
-      ,family="multinomial",type.measure="class")
-    plot(lasso)
-    browser()
+
+```{r}
+#---------------------------------------
+# MULTINOMIAL LOGIT WITH LASSO
+if(!(file.exists("preprocessed_lasso.rds"))){
+lasso <- cv.glmnet(as.matrix(train_set[,-1]),train_set[,1],family="multinomial",type.measure="class", trace.it=TRUE, nfolds=4)
+saveRDS(lasso, file = "preprocessed_lasso.rds")
+}else{
+    lasso <- readRDS("preprocessed_lasso.rds")
 }
+plot(lasso)
+
+# The best lambda value with 4 fold corss validation is 10^-10
+# this value minimizes the missclassification error
+
+lasso.pred <- predict(lasso,as.matrix(test_set[,-1]),type="class")
+lasso.pred.confmat <- table(test_set[,1],lasso.pred)
+sum(diag(lasso.pred.confmat))/sum(lasso.pred.confmat)
+# The accuracy is 98.57%
+#F1 Score
+F1_Score(test_set[,1],lasso.pred)
+# 0.997 f1 score
+#---------------------------------------
+```
+
+
+```{r}
+#---------------------------------------
+# SUPPORT VECTOR MACHINE
+constant_pixel_indexes <- get_useless_indexes(train_set)
+# I remove the constant pixels here, since they dont change, they are not useful to the SVM
+svm <- svm(train_set[,-c(1,constant_pixel_indexes)],train_set[,1])
+
+svm.pred <- predict(svm,test_set[,-c(1,constant_pixel_indexes)])
+table(test_set[,1],svm.pred)
+
+#Accuracy
+sum(diag(table(test_set[,1],svm.pred)))/nrow(test_set)
+# The accuracy is 95.2%
+#F1 Score
+F1_Score(test_set[,1],svm.pred)
+# 0.982 F1 score
+
+
+
+if(!(file.exists("preprocessed_svm_tuned.rds"))){
+# try out the different regularizations (costs from 1 to 10)
+svm.tune <- tune.svm(train_set[,-c(1,constant_pixel_indexes)],train_set[,1], cost=1:5)
+saveRDS(svm.tune, file = "preprocessed_svm_tuned.rds")
+}else{
+    svm.tune <- readRDS("preprocessed_svm_tuned.rds")
+}
+
+
+svm.tuned <- tune.svm(train_set[,-c(1,constant_pixel_indexes)],train_set[,1], cost=1)
+
+svm.tuned.pred <- predict(svm.tuned,test_set[,-c(1,constant_pixel_indexes)])
+table(test_set[,1],svm.tuned.pred)
+
+#Accuracy (tuned)
+sum(diag(table(test_set[,1],svm.tuned.pred)))/nrow(test_set)
+# The accuracy is %
+#F1 Score (tuned)
+F1_Score(test_set[,1],svm.tuned.pred)
+#  F1 score
+
+#---------------------------------------
+```
+
+
+```{r}
+#---------------------------------------
+# FEED FORWARD NEURAL NETWORK 
+# tune.nnet in nnet
+weight_decay_ranges <- 10^c(-1,-2,-3,-4,-5,-6,-7)
+size_ranges <- 1:3
+
+if(!(file.exists("preprocessed_nn_tuned.rds"))){
+# try out the different regularizations (costs from 1 to 10)
+tmodel <- tune.nnet(mnist.dat.label ~ .,data=train_set,size=1:5,decay=weight_decay_ranges)
+
+saveRDS(tmodel, file = "preprocessed_nn_tuned.rds")
+}else{
+    tmodel <- readRDS("preprocessed_nn_tuned.rds")
+}
+
+#---------------------------------------
+
+
 
 ```
 
