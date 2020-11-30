@@ -128,7 +128,7 @@ new_df <- data.frame(mnist.dat$label,mnist.dat$ink_scaled)
 colnames(new_df) <- c("label","ink_scaled")
 
 multinom <- multinom(new_df$label ~ new_df$ink_scaled)
-multinom.pred <- predict(multinom,new_df$ink_scaled)
+multinom.pred <- predict(multinom,new_df$ink_scaled, type="class")
 table(new_df$label,multinom.pred)
 ```
 
@@ -266,16 +266,15 @@ new_df <- data.frame(mnist.dat$label,mnist.dat$ink_scaled,ink_scaled)
 colnames(new_df) <- c("label","ink_scaled","straight_line_scaled")
 
 multinom <- multinom(new_df$label ~ ., data = new_df)
-multinom.pred <- predict(multinom,new_df[,-1])
+multinom.pred <- predict(multinom,new_df[,-1], type="class")
 table(new_df$label,multinom.pred)
 ```
 ```{r}
 # Accuracy:
 print(sum(diag(table(new_df$label,multinom.pred)))/sum(table(new_df$label,multinom.pred)))
-# Accuracy is 28%
+# Accuracy 
 # F1 score
 F1_Score(multinom.pred,new_df$label)
-# F1 score is 0.361
 ```
 
 The accuracy is somewhat better than using only the ink sum feature (22% vs 28%), in most cases, out of all the predictions for a certain image, the correct class had the most counts out of all other classes (0,1,2,3,5,7,8,9)
@@ -295,13 +294,13 @@ In this part we use the 784 raw pixel values themselves as features.
 First we downsample the images, because if we dont, it takes too long to train, we remove unnecessary columns from before too (ink features), then save it as an object again
 ```{r}
 
-
+mnist.dat = read.csv("mnist.csv")
 if(!(file.exists("preprocessed_data.rds"))){
 preprocessed_data <- array(c(0),dim = c(nrow(mnist.dat),14*14))
 
 pb = txtProgressBar(min = 1, max = nrow(mnist.dat), style = 3) 
 for (index in 1:nrow(mnist.dat)){
- preprocessed_data[index,] <- down_sample_image(matrix(as.numeric(mnist.dat[index,-c(ncol(mnist.dat),4,3,2,1)]),nrow=28,ncol=28,byrow=T),2)
+ preprocessed_data[index,] <- down_sample_image(matrix(as.numeric(mnist.dat[index,-1]),nrow=28,ncol=28,byrow=T),2)
  setTxtProgressBar(pb,index)
 }
 close(pb)
@@ -315,31 +314,29 @@ print("done")
 
 ```
 
-Split the data into test and train set then split the train set into folds for cross validation
+Makes a new mnist look alike dataframe that is 14x14 instead of 28x28 (scaled down) for speed
 ```{r}
 library(glmnet)
 library(e1071)
 library(nnet)
 
-#cv.glmnet
-#tune.svm
-#tune.nnet
-
-#useless_pixels <- get_useless_indexes(mnist.dat)
-preprocessed_data_df <- data.frame(mnist.dat$label,preprocessed_data)
-
-#imageShow(matrix(as.numeric(preprocessed_data_df[1,-1]),nrow=14,ncol=14,byrow=T)) # to check that it worked
-
-#imageShow(matrix(as.numeric(mnist.dat[1,-c(1,2,3,4,ncol(mnist.dat))]),nrow=28,ncol=28,byrow=T)) # to check that it worked
+preprocessed_data <- data.frame(preprocessed_data)
+if(ncol(preprocessed_data)<197){
+  preprocessed_data <- cbind(mnist.dat$label,preprocessed_data)
+}
+preprocessed_data[,1] <- as.factor(preprocessed_data[,1])
+colnames(preprocessed_data)[1] <- "label"
 
 set.seed(30)
-rows <- sample(nrow(mnist.dat)) # randomly shuffle dataset
-preprocessed_data_df <- preprocessed_data_df[rows,]
+rows <- sample(nrow(preprocessed_data)) # randomly shuffle dataset
+preprocessed_data <- preprocessed_data[rows,]
 
-test_set <- preprocessed_data_df[5001:nrow(mnist.dat),]
-train_set <- preprocessed_data_df[1:5000,]
+test_set <- preprocessed_data[5001:nrow(preprocessed_data),]
+train_set <- preprocessed_data[1:5000,]
+colnames(train_set)[1] <- "label"
+colnames(test_set)[1] <- "label"
 ```
-
+Runs cross validation with the multinomial logit with lasso regularization, then plots a graph. The first dotted line represents the lambda value that minimizes the missclasification error, the second one one that minimizes the missclassification error with a trade-off for less features used. A lamba value of "-7" means 10^-7.
 
 ```{r}
 #---------------------------------------
@@ -350,21 +347,27 @@ saveRDS(lasso, file = "preprocessed_lasso.rds")
 }else{
     lasso <- readRDS("preprocessed_lasso.rds")
 }
-plot(lasso)
 
-# The best lambda value with 4 fold corss validation is 10^-10
+# The best lambda value with 4 fold corss validation is 10^-7
 # this value minimizes the missclassification error
 
-lasso.pred <- predict(lasso,as.matrix(test_set[,-1]),type="class")
-lasso.pred.confmat <- table(test_set[,1],lasso.pred)
-sum(diag(lasso.pred.confmat))/sum(lasso.pred.confmat)
-# The accuracy is 98.57%
-#F1 Score
-F1_Score(test_set[,1],lasso.pred)
-# 0.997 f1 score
-#---------------------------------------
+plot(lasso)
 ```
 
+Here we plot a confusion matrix and print accuracy and f1 score for the multinomial logistic regression model.
+```{r}
+lasso.pred <- predict(lasso,as.matrix(test_set[,-1]),type="class")
+lasso.pred.confmat <- table(test_set[,1],lasso.pred)
+print(lasso.pred.confmat)
+#Accuracy
+sum(diag(lasso.pred.confmat))/sum(lasso.pred.confmat)
+
+#F1 Score
+F1_Score(test_set[,1],lasso.pred)
+
+#---------------------------------------
+```
+We plot a basic SVM model below, with standard parameters, and standard scaling, with columns with constants removed, the confusion matrix with f1 score and accuracy are shown below.
 
 ```{r}
 #---------------------------------------
@@ -373,62 +376,106 @@ constant_pixel_indexes <- get_useless_indexes(train_set)
 # I remove the constant pixels here, since they dont change, they are not useful to the SVM
 svm <- svm(train_set[,-c(1,constant_pixel_indexes)],train_set[,1])
 
-svm.pred <- predict(svm,test_set[,-c(1,constant_pixel_indexes)])
-table(test_set[,1],svm.pred)
+svm.pred <- predict(svm,test_set[,-c(1,constant_pixel_indexes)], type="class")
+print(table(test_set[,1],svm.pred))
 
 #Accuracy
-sum(diag(table(test_set[,1],svm.pred)))/nrow(test_set)
-# The accuracy is 95.2%
+print(sum(diag(table(test_set[,1],svm.pred)))/nrow(test_set))
+
 #F1 Score
-F1_Score(test_set[,1],svm.pred)
-# 0.982 F1 score
+print(F1_Score(test_set[,1],svm.pred))
+```
+Now we use tune, to do cross validation, and analyse different svms with cost parameter ranges that are shown in the costs vector, we also scale the values on our own, because different folds might have different constant values in each subset, so we just scale our numbers from 0-1, and turn scaling in the function off.
 
+```{r}
+scaled_train_set <- cbind(train_set$label,(train_set[,-1]/255))
+scaled_test_set <- cbind(test_set$label,(test_set[,-1]/255))
+costs <- c(1,5,10,15,20,25,28,30,35,40,50,75,100,150)
 
-
+colnames(scaled_train_set)[1] <- "label"
+colnames(scaled_test_set)[1] <- "label"
 if(!(file.exists("preprocessed_svm_tuned.rds"))){
 # try out the different regularizations (costs from 1 to 10)
-svm.tune <- tune.svm(train_set[,-c(1,constant_pixel_indexes)],train_set[,1], cost=1:5)
+svm.tune <- tune.svm(label ~ .,data=scaled_train_set, cost=costs,scale=FALSE)
 saveRDS(svm.tune, file = "preprocessed_svm_tuned.rds")
 }else{
     svm.tune <- readRDS("preprocessed_svm_tuned.rds")
 }
+```
+We now select this model and analyse it, as before, the confusion matrix with f1 score and accuracy are shown below.
+
+```{r} 
+plot(svm.tune$performances$error,svm.tune$performances$cost)
+# now we select the best model
+svm.tuned <- svm.tune$best.model
 
 
-svm.tuned <- tune.svm(train_set[,-c(1,constant_pixel_indexes)],train_set[,1], cost=1)
 
-svm.tuned.pred <- predict(svm.tuned,test_set[,-c(1,constant_pixel_indexes)])
-table(test_set[,1],svm.tuned.pred)
+svm.tuned.pred <- predict(svm.tuned,scaled_test_set[,-1], type="class")
+print(table(scaled_test_set[,1],svm.tuned.pred))
 
 #Accuracy (tuned)
-sum(diag(table(test_set[,1],svm.tuned.pred)))/nrow(test_set)
+print(sum(diag(table(scaled_test_set[,1],svm.tuned.pred)))/nrow(scaled_test_set))
 # The accuracy is %
 #F1 Score (tuned)
-F1_Score(test_set[,1],svm.tuned.pred)
+print(F1_Score(scaled_test_set[,1],svm.tuned.pred))
 #  F1 score
+
 
 #---------------------------------------
 ```
-
+We now train a feed forward neural network with parameters set to size = 4 and decay = 0.003 as a baseline.
 
 ```{r}
 #---------------------------------------
 # FEED FORWARD NEURAL NETWORK 
 # tune.nnet in nnet
-weight_decay_ranges <- 10^c(-1,-2,-3,-4,-5,-6,-7)
-size_ranges <- 1:3
+
+ff_nn <- nnet(label ~ .,data=train_set,size=4,decay=0.003)
+predicted <- predict(ff_nn,test_set[,-1], type="class")
+table(test_set[,1],predicted)
+#Accuracy
+print(sum(diag(table(test_set[,1],predicted)))/nrow(test_set))
+
+#F1 Score 
+print(F1_Score(test_set[,1],predicted))
+```
+Now we run cross validation, for decay ranges from 0.01 to 0.000001 and size ranges from 1 to 4, then we use the model with the least classification error on the test dataset, and again plot its confusion matrix and show its accuracy and f1 score.
+
+```{r}
+weight_decay_ranges_old <- 10^c(-1,-2,-3,-4,-5,-6,-7)
+weight_decay_ranges <- c(0.5, 0.1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7)
+size_ranges_old <- 1:4
 
 if(!(file.exists("preprocessed_nn_tuned.rds"))){
 # try out the different regularizations (costs from 1 to 10)
-tmodel <- tune.nnet(mnist.dat.label ~ .,data=train_set,size=1:5,decay=weight_decay_ranges)
+tmodel <- tune.nnet(label ~ .,data=train_set,size=size_ranges,decay=weight_decay_ranges)
 
 saveRDS(tmodel, file = "preprocessed_nn_tuned.rds")
 }else{
     tmodel <- readRDS("preprocessed_nn_tuned.rds")
 }
 
+predicted <- predict(tmodel$best.model,test_set[,-1], type="class")
+table(test_set[,1],predicted)
+#Accuracy (tuned)
+print(sum(diag(table(test_set[,1],predicted)))/nrow(test_set))
+
+#F1 Score (tuned)
+print(F1_Score(test_set[,1],predicted))
+
 #---------------------------------------
 
 
+```
+
+Part 6----------------------------------------------------------
+
+
+Which classification method(s) produced the best classifier for this problem?
+
+After step 3 you will have determined the best parameter settings for each algorithm, and you will have applied the algorithm with these parameter settings to the complete training sample to produce a model. Furthermore you will have estimated the error of these models on the remaining data. Now compare the accuracies of these three models, and perform a statistical test to see if there are any significant differences between their accuracies.
+```{r}
 
 ```
 
