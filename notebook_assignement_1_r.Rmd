@@ -196,12 +196,13 @@ gray_image
 
 ```{r}
 # this is just the above code in 1 block to see what different images look like
-index_of_image <- 3
+index_of_image <- 128
+imageShow(matrix(as.numeric(mnist.dat[index_of_image,5:788]),nrow=28,ncol=28,byrow=T))
 test_image <- matrix(as.numeric(mnist.dat[index_of_image,5:788]/255),nrow=28,ncol=28,byrow=T) 
 test_image_object <- writePNG(test_image)
 edges <- image_canny(image_read(test_image_object),geometry="0x1+10%+30%")
 edges
-hough <- image_hough_draw(edges,geometry="50x50+11",size=0.3,color="white",bg = "black")
+hough <- image_hough_draw(edges,geometry="9x9+12",size=0.3,color="white",bg = "black")
 gray_image <- image_convert(hough,type="grayscale")
 gray_image
 ```
@@ -220,7 +221,7 @@ if(!(file.exists("line_image_matrix.rds"))){
     image_mat <- matrix(as.numeric(mnist.dat[image_index,5:788]/255),nrow=28,ncol=28,byrow=T)
     image_object <- writePNG(image_mat)
     edges <- image_canny(image_read(image_object),geometry="0x1+10%+30%")
-    hough <- image_hough_draw(edges,geometry="50x50+11",size=0.3,color="white",bg = "black")
+    hough <- image_hough_draw(edges,geometry="9x9+12",size=0.3,color="white",bg = "black")
     gray_image <- image_convert(hough,type="grayscale")
     gray_image_data <- t(as.numeric(image_data(gray_image))[,,1]) # make it 2D
     line_image_matrix[image_index,] <- as.vector(gray_image_data)
@@ -433,25 +434,27 @@ We now train a feed forward neural network with parameters set to size = 4 and d
 # FEED FORWARD NEURAL NETWORK 
 # tune.nnet in nnet
 
-ff_nn <- nnet(label ~ .,data=train_set,size=4,decay=0.003)
-predicted <- predict(ff_nn,test_set[,-1], type="class")
-table(test_set[,1],predicted)
+#Scaled values for neural network, changes original values since this is the last code block
+
+
+ff_nn <- nnet(label ~ .,data=scaled_train_set,size=4,decay=0.03)
+predicted <- predict(ff_nn,scaled_test_set[,-1], type="class")
+table(scaled_test_set[,1],predicted)
 #Accuracy
-print(sum(diag(table(test_set[,1],predicted)))/nrow(test_set))
+print(sum(diag(table(scaled_test_set[,1],predicted)))/nrow(scaled_test_set))
 
 #F1 Score 
-print(F1_Score(test_set[,1],predicted))
+print(F1_Score(scaled_test_set[,1],predicted))
 ```
 Now we run cross validation, for decay ranges from 0.01 to 0.000001 and size ranges from 1 to 4, then we use the model with the least classification error on the test dataset, and again plot its confusion matrix and show its accuracy and f1 score. Selected parameters and performance of tested models is also shown below.
 
 ```{r}
-weight_decay_ranges_old <- 10^c(-1,-2,-3,-4,-5,-6,-7)
-weight_decay_ranges <- c(0.5, 0.1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7) # the new weights dont produce a model better than the old ones
+weight_decay_ranges <- c(0.5,0.3,0.1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7) # the new weights dont produce a model better than the old ones
 size_ranges <- 1:4
 
 if(!(file.exists("preprocessed_nn_tuned.rds"))){
 # try out the different regularizations (costs from 1 to 10)
-tmodel <- tune.nnet(label ~ .,data=train_set,size=size_ranges,decay=weight_decay_ranges)
+tmodel <- tune.nnet(label ~ .,data=scaled_train_set,size=size_ranges,decay=weight_decay_ranges)
 
 saveRDS(tmodel, file = "preprocessed_nn_tuned.rds")
 }else{
@@ -459,13 +462,13 @@ saveRDS(tmodel, file = "preprocessed_nn_tuned.rds")
 }
 
 tmodel.best <- tmodel$best.model
-predicted <- predict(tmodel.best,test_set[,-1], type="class")
-table(test_set[,1],predicted)
+predicted <- predict(tmodel.best,scaled_test_set[,-1], type="class")
+table(scaled_test_set[,1],predicted)
 #Accuracy (tuned)
-print(sum(diag(table(test_set[,1],predicted)))/nrow(test_set))
+print(sum(diag(table(scaled_test_set[,1],predicted)))/nrow(scaled_test_set))
 
 #F1 Score (tuned)
-print(F1_Score(test_set[,1],predicted))
+print(F1_Score(scaled_test_set[,1],predicted))
 
 print(tmodel$performances)
 
