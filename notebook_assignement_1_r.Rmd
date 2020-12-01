@@ -480,6 +480,9 @@ Part 6----------------------------------------------------------
 Which classification method(s) produced the best classifier for this problem?
 
 After step 3 you will have determined the best parameter settings for each algorithm, and you will have applied the algorithm with these parameter settings to the complete training sample to produce a model. Furthermore you will have estimated the error of these models on the remaining data. Now compare the accuracies of these three models, and perform a statistical test to see if there are any significant differences between their accuracies.
+
+ANSWER: The plots and most of this is done aboove, regarding the statistical test, i use F1 score, not sure if thats it, but this can be expanded in the report
+
 ```{r}
 
 ```
