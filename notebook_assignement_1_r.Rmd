@@ -336,13 +336,15 @@ train_set <- preprocessed_data[1:5000,]
 colnames(train_set)[1] <- "label"
 colnames(test_set)[1] <- "label"
 ```
-Runs cross validation with the multinomial logit with lasso regularization, then plots a graph. The first dotted line represents the lambda value that minimizes the missclasification error, the second one one that minimizes the missclassification error with a trade-off for less features used. A lamba value of "-7" means 10^-7.
+Runs cross validation with the multinomial logit with lasso regularization, then plots a graph. The first dotted line represents the lambda value that minimizes the missclasification error, the second one one that minimizes the missclassification error with a trade-off for less features used (one standard deviation from the one that minimizes missclasification error). A lamba value of "-7" means 10^-7.
 
 ```{r}
 #---------------------------------------
 # MULTINOMIAL LOGIT WITH LASSO
+constant_pixel_indexes <- get_useless_indexes(train_set)
+# the constant pixels are ignored anyway, it makes no difference (tested)
 if(!(file.exists("preprocessed_lasso.rds"))){
-lasso <- cv.glmnet(as.matrix(train_set[,-1]),train_set[,1],family="multinomial",type.measure="class", trace.it=TRUE, nfolds=4)
+lasso <- cv.glmnet(as.matrix(train_set[,-c(1,constant_pixel_indexes)]),train_set[,1],family="multinomial",type.measure="class", trace.it=TRUE, nfolds=4)
 saveRDS(lasso, file = "preprocessed_lasso.rds")
 }else{
     lasso <- readRDS("preprocessed_lasso.rds")
@@ -356,7 +358,7 @@ plot(lasso)
 
 Here we plot a confusion matrix and print accuracy and f1 score for the multinomial logistic regression model.
 ```{r}
-lasso.pred <- predict(lasso,as.matrix(test_set[,-1]),type="class")
+lasso.pred <- predict(lasso,as.matrix(test_set[,-c(1,constant_pixel_indexes)]),type="class")
 lasso.pred.confmat <- table(test_set[,1],lasso.pred)
 print(lasso.pred.confmat)
 #Accuracy
@@ -402,7 +404,7 @@ saveRDS(svm.tune, file = "preprocessed_svm_tuned.rds")
     svm.tune <- readRDS("preprocessed_svm_tuned.rds")
 }
 ```
-We now select this model and analyse it, as before, the confusion matrix with f1 score and accuracy are shown below.
+We now select this model and analyse it, as before, the confusion matrix with f1 score and accuracy are shown below. Along with a plot of how different parameters performed (error with different performance cost parameters)
 
 ```{r} 
 plot(svm.tune$performances$error,svm.tune$performances$cost)
@@ -440,12 +442,12 @@ print(sum(diag(table(test_set[,1],predicted)))/nrow(test_set))
 #F1 Score 
 print(F1_Score(test_set[,1],predicted))
 ```
-Now we run cross validation, for decay ranges from 0.01 to 0.000001 and size ranges from 1 to 4, then we use the model with the least classification error on the test dataset, and again plot its confusion matrix and show its accuracy and f1 score.
+Now we run cross validation, for decay ranges from 0.01 to 0.000001 and size ranges from 1 to 4, then we use the model with the least classification error on the test dataset, and again plot its confusion matrix and show its accuracy and f1 score. Selected parameters and performance of tested models is also shown below.
 
 ```{r}
 weight_decay_ranges_old <- 10^c(-1,-2,-3,-4,-5,-6,-7)
-weight_decay_ranges <- c(0.5, 0.1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7)
-size_ranges_old <- 1:4
+weight_decay_ranges <- c(0.5, 0.1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7) # the new weights dont produce a model better than the old ones
+size_ranges <- 1:4
 
 if(!(file.exists("preprocessed_nn_tuned.rds"))){
 # try out the different regularizations (costs from 1 to 10)
@@ -456,13 +458,16 @@ saveRDS(tmodel, file = "preprocessed_nn_tuned.rds")
     tmodel <- readRDS("preprocessed_nn_tuned.rds")
 }
 
-predicted <- predict(tmodel$best.model,test_set[,-1], type="class")
+tmodel.best <- tmodel$best.model
+predicted <- predict(tmodel.best,test_set[,-1], type="class")
 table(test_set[,1],predicted)
 #Accuracy (tuned)
 print(sum(diag(table(test_set[,1],predicted)))/nrow(test_set))
 
 #F1 Score (tuned)
 print(F1_Score(test_set[,1],predicted))
+
+print(tmodel$performances)
 
 #---------------------------------------
 
