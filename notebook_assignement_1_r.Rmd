@@ -570,10 +570,10 @@ print("-----------------------------------------------")
 
 ```
 ```{r}
-print("Fisher exact test results ---------------------------")
-fisher.test(lasso_svm_table)
-fisher.test(svm_nnet_table)
-fisher.test(lasso_nnet_table)
+print("Fisher exact test results NOT USED SINCE ITS PAIRED DATA ---------------------------")
+#fisher.test(lasso_svm_table)
+#fisher.test(svm_nnet_table)
+#fisher.test(lasso_nnet_table)
 print("-----------------------------------------------")
 ```
 
