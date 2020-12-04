@@ -129,7 +129,8 @@ colnames(new_df) <- c("label","ink_scaled")
 
 multinom <- multinom(new_df$label ~ new_df$ink_scaled)
 multinom.pred <- predict(multinom,new_df$ink_scaled, type="class")
-table(new_df$label,multinom.pred)
+table1 <- table(new_df$label,multinom.pred)
+table1
 ```
 
 
@@ -261,14 +262,15 @@ Part 4----------------------------------------------------\
 
 Now we fit it to the multinomial classifier:
 ```{r}
-ink_scaled <- scale(ink_sum,scale=max(ink_sum))
+ink_straight_scaled <- scale(ink_sum,scale=max(ink_sum))
 
-new_df <- data.frame(mnist.dat$label,mnist.dat$ink_scaled,ink_scaled)
-colnames(new_df) <- c("label","ink_scaled","straight_line_scaled")
+new_df <- data.frame(mnist.dat$label,mnist.dat$ink_scaled,ink_straight_scaled)
+colnames(new_df) <- c("label","ink_scaled","ink_straight_scaled")
 
-multinom <- multinom(new_df$label ~ ., data = new_df)
+multinom <- multinom(label ~ ., data = new_df)
 multinom.pred <- predict(multinom,new_df[,-1], type="class")
-table(new_df$label,multinom.pred)
+table2 <- table(new_df$label,multinom.pred)
+table2
 ```
 ```{r}
 # Accuracy:
@@ -361,6 +363,7 @@ Here we plot a confusion matrix and print accuracy and f1 score for the multinom
 ```{r}
 lasso.pred <- predict(lasso,as.matrix(test_set[,-c(1,constant_pixel_indexes)]),type="class")
 lasso.pred.confmat <- table(test_set[,1],lasso.pred)
+table3 <- lasso.pred.confmat
 print(lasso.pred.confmat)
 #Accuracy
 sum(diag(lasso.pred.confmat))/sum(lasso.pred.confmat)
@@ -380,13 +383,14 @@ constant_pixel_indexes <- get_useless_indexes(train_set)
 svm <- svm(train_set[,-c(1,constant_pixel_indexes)],train_set[,1])
 
 svm.pred <- predict(svm,test_set[,-c(1,constant_pixel_indexes)], type="class")
-print(table(test_set[,1],svm.pred))
-
+#print(table(test_set[,1],svm.pred))
+#table4 <- table(test_set[,1],svm.pred)
+#table4
 #Accuracy
-print(sum(diag(table(test_set[,1],svm.pred)))/nrow(test_set))
+#print(sum(diag(table(test_set[,1],svm.pred)))/nrow(test_set))
 
 #F1 Score
-print(F1_Score(test_set[,1],svm.pred))
+#print(F1_Score(test_set[,1],svm.pred))
 ```
 Now we use tune, to do cross validation, and analyse different svms with cost parameter ranges that are shown in the costs vector, we also scale the values on our own, because different folds might have different constant values in each subset, so we just scale our numbers from 0-1, and turn scaling in the function off.
 
@@ -408,7 +412,7 @@ saveRDS(svm.tune, file = "preprocessed_svm_tuned.rds")
 We now select this model and analyse it, as before, the confusion matrix with f1 score and accuracy are shown below. Along with a plot of how different parameters performed (error with different performance cost parameters)
 
 ```{r} 
-plot(svm.tune$performances$error,svm.tune$performances$cost)
+plot(svm.tune$performances$cost,svm.tune$performances$error,xlab="Cost",ylab="Missclassifciation Error")
 # now we select the best model
 svm.tuned <- svm.tune$best.model
 
@@ -416,7 +420,8 @@ svm.tuned <- svm.tune$best.model
 
 svm.tuned.pred <- predict(svm.tuned,scaled_test_set[,-1], type="class")
 print(table(scaled_test_set[,1],svm.tuned.pred))
-
+table5 <- table(scaled_test_set[,1],svm.tuned.pred)
+table5
 #Accuracy (tuned)
 print(sum(diag(table(scaled_test_set[,1],svm.tuned.pred)))/nrow(scaled_test_set))
 # The accuracy is %
@@ -440,6 +445,8 @@ We now train a feed forward neural network with parameters set to size = 4 and d
 ff_nn <- nnet(label ~ .,data=scaled_train_set,size=4,decay=0.03)
 predicted <- predict(ff_nn,scaled_test_set[,-1], type="class")
 table(scaled_test_set[,1],predicted)
+table6 <- table(scaled_test_set[,1],predicted)
+print(table6)
 #Accuracy
 print(sum(diag(table(scaled_test_set[,1],predicted)))/nrow(scaled_test_set))
 
@@ -449,6 +456,7 @@ print(F1_Score(scaled_test_set[,1],predicted))
 Now we run cross validation, for decay ranges from 0.01 to 0.000001 and size ranges from 1 to 4, then we use the model with the least classification error on the test dataset, and again plot its confusion matrix and show its accuracy and f1 score. Selected parameters and performance of tested models is also shown below.
 
 ```{r}
+
 weight_decay_ranges <- c(0.5,0.3,0.1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7) # the new weights dont produce a model better than the old ones
 size_ranges <- 1:4
 
@@ -463,14 +471,16 @@ saveRDS(tmodel, file = "preprocessed_nn_tuned.rds")
 
 tmodel.best <- tmodel$best.model
 predicted <- predict(tmodel.best,scaled_test_set[,-1], type="class")
-table(scaled_test_set[,1],predicted)
+table7 <- table(scaled_test_set[,1],predicted)
+table7
 #Accuracy (tuned)
 print(sum(diag(table(scaled_test_set[,1],predicted)))/nrow(scaled_test_set))
 
 #F1 Score (tuned)
 print(F1_Score(scaled_test_set[,1],predicted))
 
-print(tmodel$performances)
+plot(tmodel$performances$error, tmodel$performances$decay, xlab="Missclasification Error",ylab="Weight decay",sub ="Numbers represent size parameter")
+text(tmodel$performances$error, tmodel$performances$decay, labels=tmodel$performances$size, cex= 0.7,pos=1)
 
 #---------------------------------------
 
@@ -487,6 +497,83 @@ After step 3 you will have determined the best parameter settings for each algor
 ANSWER: The plots and most of this is done aboove, regarding the statistical test, i use F1 score, not sure if thats it, but this can be expanded in the report
 
 ```{r}
+# Because of 0 counts some of these dont work
+library(stats)
+library(MASS)
 
+#multinom_vect <- c(sum(diag(table3)),sum(table3)-sum(diag(table3)))
+#svm_vect <- c(sum(diag(table5)),sum(table5)-sum(diag(table5)))
+#nnet_vect <- c(sum(diag(table7)),sum(table7)-sum(diag(table7)))
+
+#test_set[,1]
+#scaled_test_set[,1]
+
+#lasso.pred
+#svm.tuned.pred
+#predicted
+
+# modelA        correct  incorrect
+# modelA        correct  incorrect
+
+#               ModelB   ModelB
+#              correct   correct
+#              incorrect incorrect
+
+# Quarters from left to right top down, square1, square2, square3, square4
+# Square1 <- modelA.pred == scaled_test_set[,1] & modelB.pred == scaled_test_set[,1]
+# Square2 <- modelB.pred == scaled_test_set[,1] & scaled_test_set[,1] != modelA.pred
+# Square3 <- modelA.pred == scaled_test_set[,1] & scaled_test_set[,1] != modelB.pred
+# Square4 <- modelB.pred != scaled_test_set[,1] & modelA.pred != scaled_test_set[,1]
+
+# ModelA_ModelB_table <- array(c(Square1,Square2,Square3,Square4),dim=c(2,2))
+
+
+modelA.pred <- lasso.pred
+modelB.pred <- svm.tuned.pred
+
+Square1 <- sum(modelA.pred == scaled_test_set[,1] & modelB.pred == scaled_test_set[,1], na.rm = TRUE)
+Square2 <- sum(modelB.pred == scaled_test_set[,1] & scaled_test_set[,1] != modelA.pred, na.rm = TRUE)
+Square3 <- sum(modelA.pred == scaled_test_set[,1] & scaled_test_set[,1] != modelB.pred, na.rm = TRUE)
+Square4 <- sum(modelB.pred != scaled_test_set[,1] & modelA.pred != scaled_test_set[,1], na.rm = TRUE)
+
+lasso_svm_table <- array(c(Square1,Square2,Square3,Square4),dim=c(2,2))
+
+modelA.pred <- svm.tuned.pred
+modelB.pred <- predicted
+
+Square1 <- sum(modelA.pred == scaled_test_set[,1] & modelB.pred == scaled_test_set[,1], na.rm = TRUE)
+Square2 <- sum(modelB.pred == scaled_test_set[,1] & scaled_test_set[,1] != modelA.pred, na.rm = TRUE)
+Square3 <- sum(modelA.pred == scaled_test_set[,1] & scaled_test_set[,1] != modelB.pred, na.rm = TRUE)
+Square4 <- sum(modelB.pred != scaled_test_set[,1] & modelA.pred != scaled_test_set[,1], na.rm = TRUE)
+
+svm_nnet_table <- array(c(Square1,Square2,Square3,Square4),dim=c(2,2))
+
+
+modelA.pred <- lasso.pred
+modelB.pred <- predicted
+
+Square1 <- sum(modelA.pred == scaled_test_set[,1] & modelB.pred == scaled_test_set[,1], na.rm = TRUE)
+Square2 <- sum(modelB.pred == scaled_test_set[,1] & scaled_test_set[,1] != modelA.pred, na.rm = TRUE)
+Square3 <- sum(modelA.pred == scaled_test_set[,1] & scaled_test_set[,1] != modelB.pred, na.rm = TRUE)
+Square4 <- sum(modelB.pred != scaled_test_set[,1] & modelA.pred != scaled_test_set[,1], na.rm = TRUE)
+
+lasso_nnet_table <- array(c(Square1,Square2,Square3,Square4),dim=c(2,2))
+```
+
+
+```{r}
+print("Mcnemar test results ---------------------------")
+mcnemar.test(lasso_svm_table)
+mcnemar.test(svm_nnet_table)
+mcnemar.test(lasso_nnet_table)
+print("-----------------------------------------------")
+
+```
+```{r}
+print("Fisher exact test results ---------------------------")
+fisher.test(lasso_svm_table)
+fisher.test(svm_nnet_table)
+fisher.test(lasso_nnet_table)
+print("-----------------------------------------------")
 ```
 
